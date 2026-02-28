@@ -1,0 +1,13 @@
+{
+  "name": "go-stop",
+  "private": true,
+  "scripts": {
+    "dev:web": "pnpm --filter @go-stop/web dev",
+    "dev:server": "pnpm --filter @go-stop/server dev",
+    "dev": "pnpm run --parallel dev:web dev:server",
+    "build": "pnpm --filter @go-stop/shared build && pnpm run --parallel build:web build:server",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "generate:routes": "pnpm --filter @go-stop/web generate:routes"
+  }
+}
