@@ -1,6 +1,22 @@
 import type { GamePhase, HwaTuCard } from '@go-stop/shared'
 import { createFullDeck, shuffleDeck, dealCards, getDealConfig } from '@go-stop/shared'
 
+/**
+ * Describes a pending choice the current player must make.
+ * When multiple field cards match a played card, the player must select one.
+ */
+export interface PendingCardChoice {
+  readonly type: 'CARD_CHOICE'
+  readonly playedCard: HwaTuCard
+  readonly matchingFieldCards: readonly HwaTuCard[]
+}
+
+/**
+ * Discriminated union for turn context.
+ * null means no active pending decision.
+ */
+export type TurnContext = PendingCardChoice | null
+
 export interface ServerGameState {
   readonly roomCode: string
   readonly phase: GamePhase
@@ -8,7 +24,7 @@ export interface ServerGameState {
   readonly players: readonly ServerPlayerState[]
   readonly fieldCards: readonly HwaTuCard[]
   readonly currentPlayerIndex: number
-  readonly turnContext: unknown | null
+  readonly turnContext: TurnContext
   readonly nagariCount: number
   readonly roundNumber: number
   readonly shakeMultipliers: ReadonlyMap<string, number>
@@ -18,14 +34,14 @@ export interface ServerGameState {
 
 export interface ServerPlayerState {
   readonly id: string
-  readonly socketId: string
-  readonly name: string
+  readonly socketId?: string
+  readonly name?: string
   readonly hand: readonly HwaTuCard[]
   readonly captured: CapturedCards
   readonly score: number
   readonly goCount: number
   readonly isConnected: boolean
-  readonly reconnectToken: string
+  readonly reconnectToken?: string
 }
 
 interface CapturedCards {
@@ -56,14 +72,11 @@ export class GameEngine {
       deck: remainingDeck,
       players: playerIds.map((id, idx) => ({
         id,
-        socketId: '',
-        name: '',
         hand: playerHands[idx] ?? [],
         captured: { gwang: [], animal: [], ribbon: [], pi: [] },
         score: 0,
         goCount: 0,
         isConnected: true,
-        reconnectToken: '',
       })),
       fieldCards,
       currentPlayerIndex: 0,
