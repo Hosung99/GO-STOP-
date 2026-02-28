@@ -10,7 +10,7 @@ export interface RoomPlayer {
 }
 
 export class Room {
-  private players: Map<string, RoomPlayer> = new Map()
+  private readonly players: Map<string, RoomPlayer> = new Map()
 
   constructor(
     readonly code: string,
