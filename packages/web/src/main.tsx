@@ -2,7 +2,10 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { routeTree } from './routes/__root'
+import { initializeSocket } from './services/socket'
 import './styles/index.css'
+
+initializeSocket(import.meta.env.VITE_API_URL as string)
 
 const router = createRouter({ routeTree })
 
