@@ -23,4 +23,14 @@ export class RoomManager {
   getRooms(): readonly Room[] {
     return Array.from(this.rooms.values()).filter((r) => !r.isEmpty())
   }
+
+  findPublicRoom(maxPlayers: 2 | 3): Room | undefined {
+    return Array.from(this.rooms.values()).find(
+      (r) => !r.isPrivate && !r.isFull() && r.maxPlayers === maxPlayers,
+    )
+  }
+
+  getRoomCount(): number {
+    return this.rooms.size
+  }
 }

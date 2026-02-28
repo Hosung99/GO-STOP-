@@ -1,4 +1,4 @@
-import type { RoomState } from '@go-stop/shared'
+import type { RoomState, ErrorCode } from '@go-stop/shared'
 
 export interface RoomPlayer {
   readonly id: string
@@ -21,9 +21,10 @@ export class Room {
 
   addPlayer(player: RoomPlayer): void {
     if (this.players.size >= this.maxPlayers) {
-      throw new Error('ROOM_FULL')
+      const errorCode: ErrorCode = 'ROOM_FULL'
+      throw new Error(errorCode)
     }
-    this.players.set(player.id, player)
+    this.players.set(player.id, { ...player })
   }
 
   removePlayer(playerId: string): void {
@@ -47,11 +48,12 @@ export class Room {
   }
 
   getPlayers(): readonly RoomPlayer[] {
-    return Array.from(this.players.values())
+    return Array.from(this.players.values()).map((p) => ({ ...p }))
   }
 
-  getPlayer(playerId: string): RoomPlayer | undefined {
-    return this.players.get(playerId)
+  getPlayer(playerId: string): Readonly<RoomPlayer> | undefined {
+    const player = this.players.get(playerId)
+    return player ? { ...player } : undefined
   }
 
   isFull(): boolean {
@@ -76,12 +78,14 @@ export class Room {
       isHost: p.isHost,
     }))
 
+    const status: RoomState['status'] = 'waiting'
+
     return {
       code: this.code,
       hostId: this.hostId,
       maxPlayers: this.maxPlayers,
       isPrivate: this.isPrivate,
-      status: 'waiting',
+      status,
       players,
     }
   }
