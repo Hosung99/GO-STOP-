@@ -59,7 +59,7 @@ interface TurnRecord {
 }
 
 export class GameEngine {
-  private state: ServerGameState
+  private readonly state: ServerGameState
 
   constructor(roomCode: string, playerIds: readonly string[], playerCount: 2 | 3) {
     const deck = shuffleDeck(createFullDeck())
