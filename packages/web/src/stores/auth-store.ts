@@ -24,7 +24,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     }),
   setGuestUser: (playerName) =>
     set({
-      userId: Math.random().toString(36).slice(2, 11),
+      userId: crypto.randomUUID(),
       playerName,
       isGuest: true,
       isAuthenticated: true,

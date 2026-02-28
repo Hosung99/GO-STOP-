@@ -20,3 +20,5 @@ export const useGameStore = create<GameStoreState>((set) => ({
   setError: (error) => set({ error }),
   clearGameState: () => set({ gameState: null, error: null }),
 }))
+
+export const selectIsGameActive = (state: GameStoreState) => state.gameState !== null

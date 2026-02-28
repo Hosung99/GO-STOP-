@@ -19,6 +19,10 @@ export function getSocket(): Socket<ServerEvent, ClientEvent> | null {
   return socketInstance
 }
 
+export function isConnected(): boolean {
+  return socketInstance?.connected ?? false
+}
+
 export function disconnectSocket(): void {
   if (socketInstance) {
     socketInstance.disconnect()
