@@ -1,13 +1,14 @@
 import { getAnimalCards, getGwangCards, getPiCards, getRibbonCards } from '../cards/constants'
+import type { HwaTuCard } from '../cards/types'
 import type { CapturedCards, ScoreBreakdown } from './types'
 
-function calculateGwangScore(gwangCards: readonly unknown[]): { points: number; type: 'none' | 'samgwang' | 'bigwang' | 'ogwang' } {
+function calculateGwangScore(gwangCards: readonly HwaTuCard[]): { points: number; type: 'none' | 'samgwang' | 'bigwang' | 'ogwang' } {
   const count = gwangCards.length
 
   if (count < 3) return { points: 0, type: 'none' }
 
   // Check if has rain gwang (month 12)
-  const hasRainGwang = (gwangCards as any).some((card: any) => card.month === 12)
+  const hasRainGwang = gwangCards.some((card) => card.month === 12)
 
   if (count >= 5) {
     return { points: 15, type: 'ogwang' }
@@ -25,13 +26,13 @@ function calculateGwangScore(gwangCards: readonly unknown[]): { points: number; 
   return { points: 3, type: 'samgwang' }
 }
 
-function calculateAnimalScore(animalCards: readonly unknown[]): { points: number; hasGodori: boolean } {
+function calculateAnimalScore(animalCards: readonly HwaTuCard[]): { points: number; hasGodori: boolean } {
   const count = animalCards.length
 
   if (count < 5) return { points: 0, hasGodori: false }
 
   // Check godori: months 2, 4, 8 animals
-  const months = (animalCards as any).map((card: any) => card.month)
+  const months = animalCards.map((card) => card.month)
   const hasGodori = months.includes(2) && months.includes(4) && months.includes(8)
 
   if (hasGodori) {
@@ -43,7 +44,7 @@ function calculateAnimalScore(animalCards: readonly unknown[]): { points: number
   return { points, hasGodori: false }
 }
 
-function calculateRibbonScore(ribbonCards: readonly unknown[]): {
+function calculateRibbonScore(ribbonCards: readonly HwaTuCard[]): {
   points: number
   hasHongdan: boolean
   hasChodan: boolean
@@ -53,7 +54,7 @@ function calculateRibbonScore(ribbonCards: readonly unknown[]): {
 
   if (count < 5) {
     // Check if has special ribbons but < 5 total
-    const kinds = (ribbonCards as any).map((card: any) => card.ribbonKind)
+    const kinds = ribbonCards.map((card) => card.ribbonKind)
     return {
       points: 0,
       hasHongdan: kinds.includes('hongdan'),
@@ -62,7 +63,7 @@ function calculateRibbonScore(ribbonCards: readonly unknown[]): {
     }
   }
 
-  const kinds = (ribbonCards as any).map((card: any) => card.ribbonKind)
+  const kinds = ribbonCards.map((card) => card.ribbonKind)
   const hasHongdan = kinds.includes('hongdan')
   const hasChodan = kinds.includes('chodan')
   const hasCheongdan = kinds.includes('cheongdan')
@@ -77,10 +78,10 @@ function calculateRibbonScore(ribbonCards: readonly unknown[]): {
   return { points: ribbonPoints, hasHongdan, hasChodan, hasCheongdan }
 }
 
-function calculatePiScore(piCards: readonly unknown[]): number {
+function calculatePiScore(piCards: readonly HwaTuCard[]): number {
   // Count double-junk as 2
   let count = 0
-  for (const card of piCards as any[]) {
+  for (const card of piCards) {
     if (card.type === 'double_junk') {
       count += 2
     } else {
@@ -95,10 +96,10 @@ function calculatePiScore(piCards: readonly unknown[]): number {
 }
 
 export function calculateScore(captured: CapturedCards): ScoreBreakdown {
-  const gwangCards = getGwangCards(captured.gwang as any)
-  const animalCards = getAnimalCards(captured.animal as any)
-  const ribbonCards = getRibbonCards(captured.ribbon as any)
-  const piCards = getPiCards(captured.pi as any)
+  const gwangCards = getGwangCards(captured.gwang)
+  const animalCards = getAnimalCards(captured.animal)
+  const ribbonCards = getRibbonCards(captured.ribbon)
+  const piCards = getPiCards(captured.pi)
 
   const gwangScore = calculateGwangScore(gwangCards)
   const animalScore = calculateAnimalScore(animalCards)
