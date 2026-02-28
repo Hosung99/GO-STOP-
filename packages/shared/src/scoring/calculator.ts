@@ -32,8 +32,8 @@ function calculateAnimalScore(animalCards: readonly HwaTuCard[]): { points: numb
   if (count < 5) return { points: 0, hasGodori: false }
 
   // Check godori: months 2, 4, 8 animals
-  const months = animalCards.map((card) => card.month)
-  const hasGodori = months.includes(2) && months.includes(4) && months.includes(8)
+  const months = new Set(animalCards.map((card) => card.month))
+  const hasGodori = months.has(2) && months.has(4) && months.has(8)
 
   if (hasGodori) {
     return { points: 5, hasGodori: true }
@@ -54,19 +54,19 @@ function calculateRibbonScore(ribbonCards: readonly HwaTuCard[]): {
 
   if (count < 5) {
     // Check if has special ribbons but < 5 total
-    const kinds = ribbonCards.map((card) => card.ribbonKind)
+    const kinds = new Set(ribbonCards.map((card) => card.ribbonKind))
     return {
       points: 0,
-      hasHongdan: kinds.includes('hongdan'),
-      hasChodan: kinds.includes('chodan'),
-      hasCheongdan: kinds.includes('cheongdan'),
+      hasHongdan: kinds.has('hongdan'),
+      hasChodan: kinds.has('chodan'),
+      hasCheongdan: kinds.has('cheongdan'),
     }
   }
 
-  const kinds = ribbonCards.map((card) => card.ribbonKind)
-  const hasHongdan = kinds.includes('hongdan')
-  const hasChodan = kinds.includes('chodan')
-  const hasCheongdan = kinds.includes('cheongdan')
+  const kinds = new Set(ribbonCards.map((card) => card.ribbonKind))
+  const hasHongdan = kinds.has('hongdan')
+  const hasChodan = kinds.has('chodan')
+  const hasCheongdan = kinds.has('cheongdan')
 
   let ribbonPoints = 1 + (count - 5)
 
