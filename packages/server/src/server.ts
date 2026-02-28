@@ -15,7 +15,7 @@ export async function startServer(): Promise<void> {
     transports: ['websocket', 'polling'],
   })
 
-  app.get('/health', (req, res) => {
+  app.get('/health', (_req, res) => {
     res.json({ status: 'ok' })
   })
 

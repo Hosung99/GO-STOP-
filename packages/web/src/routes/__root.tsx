@@ -1,5 +1,7 @@
-import { createRootRoute, createRoute, RootRoute } from '@tanstack/react-router'
+import { RootRoute, Route } from '@tanstack/react-router'
 import { App } from '../App'
+import { LobbyPage } from './index.lazy'
+import { RoomPage } from './room.lazy'
 
 const Root = new RootRoute({
   component: App,
@@ -8,19 +10,13 @@ const Root = new RootRoute({
 const indexRoute = new Route({
   getParentRoute: () => Root,
   path: '/',
-  lazy: async () => {
-    const { LobbyPage } = await import('./index.lazy')
-    return { component: LobbyPage }
-  },
+  component: LobbyPage,
 })
 
 const roomRoute = new Route({
   getParentRoute: () => Root,
   path: '/room/$roomCode',
-  lazy: async () => {
-    const { RoomPage } = await import('./room.lazy')
-    return { component: RoomPage }
-  },
+  component: RoomPage,
 })
 
 export const routeTree = Root.addChildren([indexRoute, roomRoute])
