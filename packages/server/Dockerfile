@@ -17,7 +17,7 @@ COPY packages/server ./packages/server
 RUN pnpm --filter @go-stop/shared build
 RUN pnpm --filter @go-stop/server build
 # Create standalone production bundle (resolves workspace deps automatically)
-RUN pnpm --filter @go-stop/server deploy --prod /deploy
+RUN pnpm --filter @go-stop/server deploy --prod --legacy /deploy
 
 # --- runtime stage ---
 FROM node:22-alpine AS runner
