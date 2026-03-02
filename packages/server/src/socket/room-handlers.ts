@@ -127,10 +127,16 @@ export function handleRoomEvents(
       }
 
       const players = room.getPlayers()
-      const playerCount = players.length as 2 | 3
+      const playerCount = players.length
+      if (playerCount !== 2 && playerCount !== 3) {
+        socket.emit('error:room', { event: 'error:room', payload: { message: 'Invalid player count', code: 'START_FAILED' } })
+        return
+      }
       const playerIds = players.map((p) => p.id)
 
-      const engine = new GameEngine(payload.roomCode, playerIds, playerCount)
+      // Safe cast: playerCount has been validated to be 2 or 3 at runtime above
+      const narrowedCount: 2 | 3 = playerCount as 2 | 3
+      const engine = new GameEngine(payload.roomCode, playerIds, narrowedCount)
       games.set(payload.roomCode, engine)
 
       const state = engine.getState()
@@ -150,6 +156,9 @@ export function handleRoomEvents(
         })
       }
 
+      // game:started is intentionally broadcast AFTER the per-player game:dealt loop above.
+      // Each player already received their individual hand, fieldCards, and deckCount via game:dealt.
+      // game:started serves as a synchronisation signal only; gameState: null is valid per ServerEvent type.
       io.to(payload.roomCode).emit('game:started', { event: 'game:started', payload: { gameState: null } })
       io.to(payload.roomCode).emit('game:turn_start', {
         event: 'game:turn_start',
