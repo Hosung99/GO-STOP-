@@ -1,5 +1,6 @@
 import { Outlet } from '@tanstack/react-router'
 import { AuthGate } from './components/AuthGate'
+import { ToastContainer } from './components/ToastContainer'
 
 export function App(): JSX.Element {
   return (
@@ -7,6 +8,7 @@ export function App(): JSX.Element {
       <AuthGate>
         <Outlet />
       </AuthGate>
+      <ToastContainer />
     </div>
   )
 }
