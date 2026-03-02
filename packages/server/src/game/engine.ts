@@ -5,6 +5,7 @@ import {
   createFullDeck,
   dealCards,
   findFieldMatches,
+  GAME_CONSTANTS,
   getDealConfig,
   getMatchCount,
   isBomb,
@@ -140,7 +141,7 @@ export class GameEngine {
       newPhase = {
         phase: 'TURN_FLIP_DECK',
         currentPlayerId: playerId,
-        timeoutAt: Date.now() + 30000,
+        timeoutAt: Date.now() + GAME_CONSTANTS.TURN_TIMEOUT_MS,
       }
       newTurnContext = null
     } else if (matches.length === 1) {
@@ -158,7 +159,7 @@ export class GameEngine {
         ...afterPlayedCard,
         [matchKey]: [...afterPlayedCard[matchKey], match],
       }
-      newPhase = { phase: 'TURN_FLIP_DECK', currentPlayerId: playerId, timeoutAt: Date.now() + 30000 }
+      newPhase = { phase: 'TURN_FLIP_DECK', currentPlayerId: playerId, timeoutAt: Date.now() + GAME_CONSTANTS.TURN_TIMEOUT_MS }
       newTurnContext = null
     } else {
       // Multiple matches: player must choose which field card to capture
@@ -166,7 +167,7 @@ export class GameEngine {
         phase: 'TURN_CHOOSE_FIELD_CARD',
         currentPlayerId: playerId,
         matchOptions: matches.map((c) => c.id),
-        timeoutAt: Date.now() + 30000,
+        timeoutAt: Date.now() + GAME_CONSTANTS.TURN_TIMEOUT_MS,
       }
       newTurnContext = {
         type: 'CARD_CHOICE',
@@ -234,7 +235,7 @@ export class GameEngine {
         phase: 'TURN_CHOOSE_FLIP_MATCH',
         currentPlayerId: playerId,
         matchOptions: matches.map((c) => c.id),
-        timeoutAt: Date.now() + 30000,
+        timeoutAt: Date.now() + GAME_CONSTANTS.TURN_TIMEOUT_MS,
       }
     }
 
@@ -263,7 +264,7 @@ export class GameEngine {
       phase: {
         phase: 'TURN_PLAY_CARD',
         currentPlayerId: nextPlayer.id,
-        timeoutAt: Date.now() + 30000,
+        timeoutAt: Date.now() + GAME_CONSTANTS.TURN_TIMEOUT_MS,
       },
       turnContext: null,
     }
@@ -292,6 +293,90 @@ export class GameEngine {
     this.state = {
       ...this.state,
       players: this.state.players.map((p) => (p.id === playerId ? updatedPlayer : p)),
+    }
+  }
+
+  /**
+   * Player chose which field card to capture in a multi-match scenario.
+   * Precondition: phase is TURN_CHOOSE_FIELD_CARD and turnContext is CARD_CHOICE
+   */
+  chooseFieldCard(playerId: string, chosenFieldCardId: string): void {
+    if (this.state.phase.phase !== 'TURN_CHOOSE_FIELD_CARD') {
+      throw new Error('INVALID_PHASE')
+    }
+    const ctx = this.state.turnContext
+    if (!ctx || ctx.type !== 'CARD_CHOICE') {
+      throw new Error('NO_TURN_CONTEXT')
+    }
+    const chosenCard = this.state.fieldCards.find((c) => c.id === chosenFieldCardId)
+    if (!chosenCard) throw new Error('CARD_NOT_ON_FIELD')
+
+    const player = this.state.players.find((p) => p.id === playerId)
+    if (!player) throw new Error('PLAYER_NOT_FOUND')
+
+    const playedCard = ctx.playedCard
+    const newFieldCards = this.state.fieldCards.filter((c) => c.id !== chosenFieldCardId)
+    const playedKey = getCaptureKey(playedCard)
+    const matchKey = getCaptureKey(chosenCard)
+    const afterPlayedCard = {
+      ...player.captured,
+      [playedKey]: [...player.captured[playedKey], playedCard],
+    }
+    const newCaptured: CapturedCards = {
+      ...afterPlayedCard,
+      [matchKey]: [...afterPlayedCard[matchKey], chosenCard],
+    }
+
+    this.state = {
+      ...this.state,
+      players: this.state.players.map((p) =>
+        p.id === playerId ? { ...p, captured: newCaptured } : p,
+      ),
+      fieldCards: newFieldCards,
+      phase: { phase: 'TURN_FLIP_DECK', currentPlayerId: playerId, timeoutAt: Date.now() + GAME_CONSTANTS.TURN_TIMEOUT_MS },
+      turnContext: null,
+    }
+  }
+
+  /**
+   * Player chose which field card matches the deck flip in a multi-match scenario.
+   * Precondition: phase is TURN_CHOOSE_FLIP_MATCH and turnContext is CARD_CHOICE
+   */
+  chooseFlipMatch(playerId: string, chosenFieldCardId: string): void {
+    if (this.state.phase.phase !== 'TURN_CHOOSE_FLIP_MATCH') {
+      throw new Error('INVALID_PHASE')
+    }
+    const ctx = this.state.turnContext
+    if (!ctx || ctx.type !== 'CARD_CHOICE') {
+      throw new Error('NO_TURN_CONTEXT')
+    }
+    const chosenCard = this.state.fieldCards.find((c) => c.id === chosenFieldCardId)
+    if (!chosenCard) throw new Error('CARD_NOT_ON_FIELD')
+
+    const player = this.state.players.find((p) => p.id === playerId)
+    if (!player) throw new Error('PLAYER_NOT_FOUND')
+
+    const flippedCard = ctx.playedCard
+    const newFieldCards = this.state.fieldCards.filter((c) => c.id !== chosenFieldCardId)
+    const flippedKey = getCaptureKey(flippedCard)
+    const matchKey = getCaptureKey(chosenCard)
+    const afterFlipped = {
+      ...player.captured,
+      [flippedKey]: [...player.captured[flippedKey], flippedCard],
+    }
+    const newCaptured: CapturedCards = {
+      ...afterFlipped,
+      [matchKey]: [...afterFlipped[matchKey], chosenCard],
+    }
+
+    this.state = {
+      ...this.state,
+      players: this.state.players.map((p) =>
+        p.id === playerId ? { ...p, captured: newCaptured } : p,
+      ),
+      fieldCards: newFieldCards,
+      phase: { phase: 'TURN_RESOLVE_CAPTURE', currentPlayerId: playerId },
+      turnContext: null,
     }
   }
 }

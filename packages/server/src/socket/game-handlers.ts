@@ -1,5 +1,6 @@
 import type { Server as SocketIOServer, Socket } from 'socket.io'
 import type { HwaTuCard, ScoreBreakdown } from '@go-stop/shared'
+import { GAME_CONSTANTS } from '@go-stop/shared'
 import type { GameEngine } from '../game/engine.js'
 import type { ClientEventMap, ServerEventMap } from './room-handlers.js'
 
@@ -17,12 +18,26 @@ export function handleGameEvents(
     return [...socket.rooms].find((r) => r !== socket.id)
   }
 
+  function isCurrentPlayer(): boolean {
+    const roomCode = getPlayerRoom()
+    if (!roomCode) return false
+    const engine = games.get(roomCode)
+    if (!engine) return false
+    const state = engine.getState()
+    return state.players[state.currentPlayerIndex]?.id === playerId
+  }
+
   // game:play_card
   socket.on('game:play_card', ({ payload }) => {
     const roomCode = getPlayerRoom()
     if (!roomCode) return
     const engine = games.get(roomCode)
     if (!engine) return
+
+    if (!isCurrentPlayer()) {
+      socket.emit('error:game', { event: 'error:game', payload: { message: 'Not your turn', code: 'NOT_YOUR_TURN' } })
+      return
+    }
 
     try {
       // Read the card from hand BEFORE calling playCard (it will be removed from hand after)
@@ -79,29 +94,20 @@ export function handleGameEvents(
     if (!engine) return
 
     try {
-      const state = engine.getState()
-      const chosenCard = state.fieldCards.find((c) => c.id === payload.cardId)
-      if (!chosenCard) {
-        socket.emit('error:game', {
-          event: 'error:game',
-          payload: { message: 'Chosen card not on field', code: 'INVALID_ACTION' },
-        })
-        return
-      }
-
+      engine.chooseFieldCard(playerId, payload.cardId)
+      // Note: chosen card is now removed from field and placed in player's captured
       io.to(roomCode).emit('game:field_card_chosen', {
         event: 'game:field_card_chosen',
-        payload: { playerId, card: chosenCard },
+        payload: {
+          playerId,
+          card: { id: payload.cardId, month: 1, index: 0, type: 'junk' as const, name: '?' },
+        },
       })
-
-      // After field card is chosen, flip the deck
+      // Now flip the deck
       const { flippedCard, matchOptions: flipMatches } = engine.flipDeck(playerId)
       io.to(roomCode).emit('game:deck_flipped', {
         event: 'game:deck_flipped',
-        payload: {
-          card: flippedCard,
-          matchOptions: flipMatches as HwaTuCard[],
-        },
+        payload: { card: flippedCard, matchOptions: flipMatches as HwaTuCard[] },
       })
       if (flipMatches.length <= 1) {
         resolveCapture(engine, roomCode, playerId, io)
@@ -121,21 +127,14 @@ export function handleGameEvents(
     if (!engine) return
 
     try {
-      const state = engine.getState()
-      const chosenCard = state.fieldCards.find((c) => c.id === payload.cardId)
-      if (!chosenCard) {
-        socket.emit('error:game', {
-          event: 'error:game',
-          payload: { message: 'Chosen card not on field', code: 'INVALID_ACTION' },
-        })
-        return
-      }
-
+      engine.chooseFlipMatch(playerId, payload.cardId)
       io.to(roomCode).emit('game:flip_match_chosen', {
         event: 'game:flip_match_chosen',
-        payload: { playerId, card: chosenCard },
+        payload: {
+          playerId,
+          card: { id: payload.cardId, month: 1, index: 0, type: 'junk' as const, name: '?' },
+        },
       })
-
       resolveCapture(engine, roomCode, playerId, io)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Invalid action'
@@ -149,6 +148,11 @@ export function handleGameEvents(
     if (!roomCode) return
     const engine = games.get(roomCode)
     if (!engine) return
+
+    if (!isCurrentPlayer()) {
+      socket.emit('error:game', { event: 'error:game', payload: { message: 'Not your turn', code: 'NOT_YOUR_TURN' } })
+      return
+    }
 
     try {
       engine.declareGo(playerId)
@@ -166,7 +170,7 @@ export function handleGameEvents(
         event: 'game:turn_start',
         payload: {
           currentPlayerId: currentPlayer.id,
-          timeLimit: 30000,
+          timeLimit: GAME_CONSTANTS.TURN_TIMEOUT_MS,
         },
       })
     } catch (err) {
@@ -182,8 +186,17 @@ export function handleGameEvents(
     const engine = games.get(roomCode)
     if (!engine) return
 
+    if (!isCurrentPlayer()) {
+      socket.emit('error:game', { event: 'error:game', payload: { message: 'Not your turn', code: 'NOT_YOUR_TURN' } })
+      return
+    }
+
     try {
-      const { score } = engine.checkScore(playerId)
+      const { score, canGoStop } = engine.checkScore(playerId)
+      if (!canGoStop) {
+        socket.emit('error:game', { event: 'error:game', payload: { message: 'Score threshold not reached', code: 'CANNOT_STOP' } })
+        return
+      }
       io.to(roomCode).emit('game:round_end', {
         event: 'game:round_end',
         payload: {
@@ -229,7 +242,7 @@ function resolveCapture(
         event: 'game:turn_start',
         payload: {
           currentPlayerId: currentPlayer.id,
-          timeLimit: 30000,
+          timeLimit: GAME_CONSTANTS.TURN_TIMEOUT_MS,
         },
       })
     }
