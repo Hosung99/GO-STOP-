@@ -1,12 +1,20 @@
 import { Server as SocketIOServer } from 'socket.io'
 import type { ClientEvent, ServerEvent } from '@go-stop/shared'
+import { RoomManager } from '../room/room-manager.js'
+import { handleRoomEvents } from './room-handlers.js'
 
-export function setupSocketNamespace(io: SocketIOServer<ClientEvent, ServerEvent>): void {
+const roomManager = new RoomManager()
+
+export function setupSocketNamespace(
+  io: SocketIOServer<ClientEvent, ServerEvent>,
+): void {
   io.on('connection', (socket) => {
-    console.log('Player connected:', socket.id)
+    const playerId = socket.id
+
+    handleRoomEvents(socket, io, roomManager, playerId)
 
     socket.on('disconnect', () => {
-      console.log('Player disconnected:', socket.id)
+      // future: mark player disconnected in room
     })
   })
 }
