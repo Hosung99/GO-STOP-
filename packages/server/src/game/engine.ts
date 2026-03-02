@@ -144,19 +144,21 @@ export class GameEngine {
       }
       newTurnContext = null
     } else if (matches.length === 1) {
-      // Exactly 1 match: auto-capture both cards
+      // 1 match: auto-capture both cards to their respective buckets
       const match = matches[0]!
       newFieldCards = this.state.fieldCards.filter((c) => c.id !== match.id)
-      const captureKey = getCaptureKey(card)
-      newCaptured = {
+      const playedKey = getCaptureKey(card)
+      const matchKey = getCaptureKey(match)
+      // Place each card in its own type-appropriate bucket
+      const afterPlayedCard = {
         ...player.captured,
-        [captureKey]: [...player.captured[captureKey], card, match],
+        [playedKey]: [...player.captured[playedKey], card],
       }
-      newPhase = {
-        phase: 'TURN_FLIP_DECK',
-        currentPlayerId: playerId,
-        timeoutAt: Date.now() + 30000,
+      newCaptured = {
+        ...afterPlayedCard,
+        [matchKey]: [...afterPlayedCard[matchKey], match],
       }
+      newPhase = { phase: 'TURN_FLIP_DECK', currentPlayerId: playerId, timeoutAt: Date.now() + 30000 }
       newTurnContext = null
     } else {
       // Multiple matches: player must choose which field card to capture
@@ -199,26 +201,52 @@ export class GameEngine {
 
     const matches = findFieldMatches(flippedCard, this.state.fieldCards)
 
-    const newPhase: GamePhase =
-      matches.length > 1
-        ? {
-            phase: 'TURN_CHOOSE_FLIP_MATCH',
-            currentPlayerId: playerId,
-            matchOptions: matches.map((c) => c.id),
-            timeoutAt: Date.now() + 30000,
-          }
-        : { phase: 'TURN_RESOLVE_CAPTURE', currentPlayerId: playerId }
+    let newFieldCards = this.state.fieldCards
+    let newPlayers = this.state.players
+    let newPhase: GamePhase
 
-    const newTurnContext: TurnContext =
-      matches.length > 1
-        ? { type: 'CARD_CHOICE', playedCard: flippedCard, matchingFieldCards: matches }
-        : null
+    if (matches.length === 0) {
+      // No match: place flipped card on field, go to resolve (auto-advance turn)
+      newFieldCards = [...this.state.fieldCards, flippedCard]
+      newPhase = { phase: 'TURN_RESOLVE_CAPTURE', currentPlayerId: playerId }
+    } else if (matches.length === 1) {
+      // 1 match: auto-capture both cards to their respective buckets
+      const match = matches[0]!
+      newFieldCards = this.state.fieldCards.filter((c) => c.id !== match.id)
+      const player = this.state.players.find((p) => p.id === playerId)!
+      const flippedKey = getCaptureKey(flippedCard)
+      const matchKey = getCaptureKey(match)
+      const afterFlipped = {
+        ...player.captured,
+        [flippedKey]: [...player.captured[flippedKey], flippedCard],
+      }
+      const newCaptured: CapturedCards = {
+        ...afterFlipped,
+        [matchKey]: [...afterFlipped[matchKey], match],
+      }
+      newPlayers = this.state.players.map((p) =>
+        p.id === playerId ? { ...p, captured: newCaptured } : p,
+      )
+      newPhase = { phase: 'TURN_RESOLVE_CAPTURE', currentPlayerId: playerId }
+    } else {
+      // 2+ matches: player must choose
+      newPhase = {
+        phase: 'TURN_CHOOSE_FLIP_MATCH',
+        currentPlayerId: playerId,
+        matchOptions: matches.map((c) => c.id),
+        timeoutAt: Date.now() + 30000,
+      }
+    }
 
     this.state = {
       ...this.state,
       deck: remainingDeck,
+      players: newPlayers,
+      fieldCards: newFieldCards,
       phase: newPhase,
-      turnContext: newTurnContext,
+      turnContext: matches.length > 1
+        ? { type: 'CARD_CHOICE', playedCard: flippedCard, matchingFieldCards: matches }
+        : null,
     }
 
     return { flippedCard, matchOptions: matches }
@@ -227,13 +255,14 @@ export class GameEngine {
   advanceTurn(): void {
     const nextIndex = (this.state.currentPlayerIndex + 1) % this.state.players.length
     const nextPlayer = this.state.players[nextIndex]
+    if (!nextPlayer) throw new Error('PLAYER_NOT_FOUND')
 
     this.state = {
       ...this.state,
       currentPlayerIndex: nextIndex,
       phase: {
         phase: 'TURN_PLAY_CARD',
-        currentPlayerId: nextPlayer?.id ?? '',
+        currentPlayerId: nextPlayer.id,
         timeoutAt: Date.now() + 30000,
       },
       turnContext: null,
