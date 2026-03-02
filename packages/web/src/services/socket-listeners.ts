@@ -1,5 +1,5 @@
 import type { Socket } from 'socket.io-client'
-import type { ClientEvent, ServerEvent, RoomState, PlayerInfo, ClientGameState } from '@go-stop/shared'
+import type { ClientEvent, ServerEvent, RoomState, PlayerInfo, ClientGameState, ClientPlayerState } from '@go-stop/shared'
 import type { AnyRouter } from '@tanstack/react-router'
 import { useRoomStore } from '../stores/room-store'
 import { useGameStore } from '../stores/game-store'
@@ -20,6 +20,10 @@ export function attachSocketListeners(
   // Room events
   s.on('room:created', (data: { payload: { roomCode: string; room: RoomState } }) => {
     useRoomStore.getState().setRoom(data.payload.room)
+    // socket.id is the playerId assigned to the room creator by the server.
+    // Non-null assertion is safe: receiving room:created guarantees the socket is connected.
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    useRoomStore.getState().setMyPlayerId(socket.id!)
     void router.navigate({ to: '/room/$roomCode', params: { roomCode: data.payload.roomCode } })
   })
 
@@ -50,7 +54,7 @@ export function attachSocketListeners(
       useGameStore.getState().setGameState({
         phase: { phase: 'DEALING', roundNumber: 1 },
         roomCode: room?.code ?? '',
-        players: [],
+        players: [] as readonly ClientPlayerState[],
         myHand: data.payload.hand,
         fieldCards: data.payload.fieldCards,
         deckCount: data.payload.deckCount,
@@ -63,10 +67,8 @@ export function attachSocketListeners(
   )
 
   s.on('game:started', () => {
-    const room = useRoomStore.getState().room
-    if (room) {
-      void router.navigate({ to: '/room/$roomCode', params: { roomCode: room.code } })
-    }
+    // TODO: /game route is added in Task E2. Using type assertion until the route exists.
+    void router.navigate({ to: '/game' as string })
   })
 
   s.on('game:turn_start', (data: { payload: { currentPlayerId: string; timeLimit: number } }) => {
