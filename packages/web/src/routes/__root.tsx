@@ -2,6 +2,7 @@ import { RootRoute, Route } from '@tanstack/react-router'
 import { App } from '../App'
 import { LobbyPage } from './index.lazy'
 import { RoomPage } from './room.lazy'
+import { GamePage } from './game.lazy'
 
 const Root = new RootRoute({
   component: App,
@@ -19,4 +20,10 @@ const roomRoute = new Route({
   component: RoomPage,
 })
 
-export const routeTree = Root.addChildren([indexRoute, roomRoute])
+const gameRoute = new Route({
+  getParentRoute: () => Root,
+  path: '/game',
+  component: GamePage,
+})
+
+export const routeTree = Root.addChildren([indexRoute, roomRoute, gameRoute])

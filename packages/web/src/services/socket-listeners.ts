@@ -67,8 +67,7 @@ export function attachSocketListeners(
   )
 
   s.on('game:started', () => {
-    // TODO: /game route is added in Task E2. Using type assertion until the route exists.
-    void router.navigate({ to: '/game' as string })
+    void router.navigate({ to: '/game' })
   })
 
   s.on('game:turn_start', (data: { payload: { currentPlayerId: string; timeLimit: number } }) => {
