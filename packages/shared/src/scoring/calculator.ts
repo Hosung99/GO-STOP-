@@ -28,20 +28,22 @@ function calculateGwangScore(gwangCards: readonly HwaTuCard[]): { points: number
 
 function calculateAnimalScore(animalCards: readonly HwaTuCard[]): { points: number; hasGodori: boolean } {
   const count = animalCards.length
-
-  if (count < 5) return { points: 0, hasGodori: false }
-
-  // Check godori: months 2, 4, 8 animals
   const months = new Set(animalCards.map((card) => card.month))
   const hasGodori = months.has(2) && months.has(4) && months.has(8)
 
+  let points = 0
+
+  // Godori bonus: 5 points for having animals from months 2, 4, 8
   if (hasGodori) {
-    return { points: 5, hasGodori: true }
+    points += 5
   }
 
-  // Points: 5장=1점, +1/장
-  const points = 1 + (count - 5)
-  return { points, hasGodori: false }
+  // Animal count bonus: needs 5+ animals total
+  if (count >= 5) {
+    points += 1 + (count - 5)
+  }
+
+  return { points, hasGodori }
 }
 
 function calculateRibbonScore(ribbonCards: readonly HwaTuCard[]): {

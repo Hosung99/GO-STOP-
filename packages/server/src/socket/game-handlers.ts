@@ -52,7 +52,7 @@ export function handleGameEvents(
         return
       }
 
-      const { matchOptions } = engine.playCard(playerId, payload.cardId)
+      const { matchOptions, isBomb } = engine.playCard(playerId, payload.cardId)
 
       io.to(roomCode).emit('game:card_played', {
         event: 'game:card_played',
@@ -63,8 +63,8 @@ export function handleGameEvents(
         },
       })
 
-      if (matchOptions.length <= 1) {
-        // Auto-resolved (0 or 1 match): flip the deck card
+      if (matchOptions.length <= 1 || isBomb) {
+        // Auto-resolved (0 or 1 match, or bomb): flip the deck card
         const { flippedCard, matchOptions: flipMatches } = engine.flipDeck(playerId)
         io.to(roomCode).emit('game:deck_flipped', {
           event: 'game:deck_flipped',
@@ -79,7 +79,7 @@ export function handleGameEvents(
         }
         // flipMatches.length > 1: player must choose via game:choose_flip_match
       }
-      // matchOptions.length > 1: player must choose via game:choose_field_card
+      // matchOptions.length > 1 && !isBomb: player must choose via game:choose_field_card
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Invalid action'
       socket.emit('error:game', { event: 'error:game', payload: { message: msg, code: 'INVALID_ACTION' } })
@@ -94,13 +94,15 @@ export function handleGameEvents(
     if (!engine) return
 
     try {
+      const preState = engine.getState()
+      const chosenCard = preState.fieldCards.find((c) => c.id === payload.cardId)
       engine.chooseFieldCard(playerId, payload.cardId)
       // Note: chosen card is now removed from field and placed in player's captured
       io.to(roomCode).emit('game:field_card_chosen', {
         event: 'game:field_card_chosen',
         payload: {
           playerId,
-          card: { id: payload.cardId, month: 1, index: 0, type: 'junk' as const, name: '?' },
+          card: chosenCard ?? { id: payload.cardId, month: 1 as const, index: 0, type: 'junk' as const, name: '?' },
         },
       })
       // Now flip the deck
@@ -127,12 +129,14 @@ export function handleGameEvents(
     if (!engine) return
 
     try {
+      const preState = engine.getState()
+      const chosenCard = preState.fieldCards.find((c) => c.id === payload.cardId)
       engine.chooseFlipMatch(playerId, payload.cardId)
       io.to(roomCode).emit('game:flip_match_chosen', {
         event: 'game:flip_match_chosen',
         payload: {
           playerId,
-          card: { id: payload.cardId, month: 1, index: 0, type: 'junk' as const, name: '?' },
+          card: chosenCard ?? { id: payload.cardId, month: 1 as const, index: 0, type: 'junk' as const, name: '?' },
         },
       })
       resolveCapture(engine, roomCode, playerId, io)

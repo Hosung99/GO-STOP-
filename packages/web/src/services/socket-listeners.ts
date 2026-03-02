@@ -63,11 +63,15 @@ export function attachSocketListeners(
         nagariCount: 0,
         roundNumber: 1,
       })
+      // Navigate after game state is initialized to avoid race condition
+      void router.navigate({ to: '/game' })
     },
   )
 
+  // game:started is kept as a no-op; navigation is handled by game:dealt
+  // to ensure game state is initialized before the game page renders
   s.on('game:started', () => {
-    void router.navigate({ to: '/game' })
+    // intentionally empty
   })
 
   s.on('game:turn_start', (data: { payload: { currentPlayerId: string; timeLimit: number } }) => {

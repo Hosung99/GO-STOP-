@@ -161,8 +161,32 @@ export class GameEngine {
       }
       newPhase = { phase: 'TURN_FLIP_DECK', currentPlayerId: playerId, timeoutAt: Date.now() + GAME_CONSTANTS.TURN_TIMEOUT_MS }
       newTurnContext = null
+    } else if (bomb) {
+      // Bomb: all 3 field cards auto-captured
+      newFieldCards = this.state.fieldCards.filter(
+        (c) => !matches.some((m) => m.id === c.id),
+      )
+      // Capture played card first
+      let captured: CapturedCards = {
+        ...player.captured,
+        [getCaptureKey(card)]: [...player.captured[getCaptureKey(card)], card],
+      }
+      // Then capture all 3 field matches
+      for (const match of matches) {
+        captured = {
+          ...captured,
+          [getCaptureKey(match)]: [...captured[getCaptureKey(match)], match],
+        }
+      }
+      newCaptured = captured
+      newPhase = {
+        phase: 'TURN_FLIP_DECK',
+        currentPlayerId: playerId,
+        timeoutAt: Date.now() + GAME_CONSTANTS.TURN_TIMEOUT_MS,
+      }
+      newTurnContext = null
     } else {
-      // Multiple matches: player must choose which field card to capture
+      // 2 matches: player must choose which field card to capture
       newPhase = {
         phase: 'TURN_CHOOSE_FIELD_CARD',
         currentPlayerId: playerId,
@@ -187,7 +211,7 @@ export class GameEngine {
       players: this.state.players.map((p) => (p.id === playerId ? updatedPlayer : p)),
       fieldCards: newFieldCards,
       phase: newPhase,
-      turnContext: newTurnContext,
+      turnContext: newTurnContext ?? null,
     }
 
     return { matchOptions: matches, isBomb: bomb }
@@ -311,6 +335,9 @@ export class GameEngine {
     const chosenCard = this.state.fieldCards.find((c) => c.id === chosenFieldCardId)
     if (!chosenCard) throw new Error('CARD_NOT_ON_FIELD')
 
+    const isValidChoice = ctx.matchingFieldCards.some((c) => c.id === chosenFieldCardId)
+    if (!isValidChoice) throw new Error('INVALID_CHOICE')
+
     const player = this.state.players.find((p) => p.id === playerId)
     if (!player) throw new Error('PLAYER_NOT_FOUND')
 
@@ -352,6 +379,9 @@ export class GameEngine {
     }
     const chosenCard = this.state.fieldCards.find((c) => c.id === chosenFieldCardId)
     if (!chosenCard) throw new Error('CARD_NOT_ON_FIELD')
+
+    const isValidChoice = ctx.matchingFieldCards.some((c) => c.id === chosenFieldCardId)
+    if (!isValidChoice) throw new Error('INVALID_CHOICE')
 
     const player = this.state.players.find((p) => p.id === playerId)
     if (!player) throw new Error('PLAYER_NOT_FOUND')
