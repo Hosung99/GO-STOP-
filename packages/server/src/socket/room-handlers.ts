@@ -10,8 +10,8 @@ type DiscriminatedUnionToEventMap<T extends { event: string; payload: unknown }>
   [E in T as E['event']]: (arg: E) => void
 }
 
-type ClientEventMap = DiscriminatedUnionToEventMap<ClientEvent>
-type ServerEventMap = DiscriminatedUnionToEventMap<ServerEvent>
+export type ClientEventMap = DiscriminatedUnionToEventMap<ClientEvent>
+export type ServerEventMap = DiscriminatedUnionToEventMap<ServerEvent>
 
 type AppSocket = Socket<ClientEventMap, ServerEventMap>
 type AppServer = SocketIOServer<ClientEventMap, ServerEventMap>
@@ -65,10 +65,13 @@ export function handleRoomEvents(
       })
       socket.join(payload.roomCode)
       socket.emit('room:joined', { event: 'room:joined', payload: { room: room.toState(), playerId } })
-      socket.to(payload.roomCode).emit('room:player_joined', {
-        event: 'room:player_joined',
-        payload: { player: room.getPlayer(playerId) },
-      })
+      const joinedPlayer = room.getPlayer(playerId)
+      if (joinedPlayer) {
+        socket.to(payload.roomCode).emit('room:player_joined', {
+          event: 'room:player_joined',
+          payload: { player: joinedPlayer },
+        })
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Join failed'
       socket.emit('error:room', { event: 'error:room', payload: { message, code: 'JOIN_FAILED' } })
@@ -77,22 +80,30 @@ export function handleRoomEvents(
 
   // room:leave
   socket.on('room:leave', ({ payload }) => {
-    const room = roomManager.getRoom(payload.roomCode)
-    if (!room) return
-    room.removePlayer(playerId)
-    socket.leave(payload.roomCode)
-    io.to(payload.roomCode).emit('room:player_left', { event: 'room:player_left', payload: { playerId } })
-    if (room.isEmpty()) roomManager.deleteRoom(payload.roomCode)
+    try {
+      const room = roomManager.getRoom(payload.roomCode)
+      if (!room) return
+      room.removePlayer(playerId)
+      socket.leave(payload.roomCode)
+      io.to(payload.roomCode).emit('room:player_left', { event: 'room:player_left', payload: { playerId } })
+      if (room.isEmpty()) roomManager.deleteRoom(payload.roomCode)
+    } catch {
+      socket.emit('error:room', { event: 'error:room', payload: { message: 'Failed to leave room', code: 'LEAVE_FAILED' } })
+    }
   })
 
   // room:ready
   socket.on('room:ready', ({ payload }) => {
-    const room = roomManager.getRoom(payload.roomCode)
-    if (!room) return
-    room.setReady(playerId, payload.ready)
-    io.to(payload.roomCode).emit('room:player_ready', {
-      event: 'room:player_ready',
-      payload: { playerId, ready: payload.ready },
-    })
+    try {
+      const room = roomManager.getRoom(payload.roomCode)
+      if (!room) return
+      room.setReady(playerId, payload.ready)
+      io.to(payload.roomCode).emit('room:player_ready', {
+        event: 'room:player_ready',
+        payload: { playerId, ready: payload.ready },
+      })
+    } catch {
+      socket.emit('error:room', { event: 'error:room', payload: { message: 'Failed to update ready state', code: 'READY_FAILED' } })
+    }
   })
 }

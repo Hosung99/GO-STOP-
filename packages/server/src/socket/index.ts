@@ -1,12 +1,12 @@
 import { Server as SocketIOServer } from 'socket.io'
-import type { ClientEvent, ServerEvent } from '@go-stop/shared'
 import { RoomManager } from '../room/room-manager.js'
 import { handleRoomEvents } from './room-handlers.js'
+import type { ClientEventMap, ServerEventMap } from './room-handlers.js'
 
 const roomManager = new RoomManager()
 
 export function setupSocketNamespace(
-  io: SocketIOServer<ClientEvent, ServerEvent>,
+  io: SocketIOServer<ClientEventMap, ServerEventMap>,
 ): void {
   io.on('connection', (socket) => {
     const playerId = socket.id
