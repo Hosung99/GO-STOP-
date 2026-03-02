@@ -1,5 +1,15 @@
-import type { GamePhase, HwaTuCard } from '@go-stop/shared'
-import { createFullDeck, shuffleDeck, dealCards, getDealConfig } from '@go-stop/shared'
+import type { CapturedCards, GamePhase, HwaTuCard, ScoreBreakdown } from '@go-stop/shared'
+import {
+  calculateScore,
+  canDeclareGoStop,
+  createFullDeck,
+  dealCards,
+  findFieldMatches,
+  getDealConfig,
+  getMatchCount,
+  isBomb,
+  shuffleDeck,
+} from '@go-stop/shared'
 
 /**
  * Describes a pending choice the current player must make.
@@ -44,13 +54,6 @@ export interface ServerPlayerState {
   readonly reconnectToken?: string
 }
 
-interface CapturedCards {
-  readonly gwang: readonly HwaTuCard[]
-  readonly animal: readonly HwaTuCard[]
-  readonly ribbon: readonly HwaTuCard[]
-  readonly pi: readonly HwaTuCard[]
-}
-
 interface TurnRecord {
   readonly roundNumber: number
   readonly playerId: string
@@ -58,8 +61,22 @@ interface TurnRecord {
   readonly timestamp: number
 }
 
+function getCaptureKey(card: HwaTuCard): keyof CapturedCards {
+  switch (card.type) {
+    case 'gwang':
+      return 'gwang'
+    case 'animal':
+      return 'animal'
+    case 'ribbon':
+      return 'ribbon'
+    case 'junk':
+    case 'double_junk':
+      return 'pi'
+  }
+}
+
 export class GameEngine {
-  private readonly state: ServerGameState
+  private state: ServerGameState
 
   constructor(roomCode: string, playerIds: readonly string[], playerCount: 2 | 3) {
     const deck = shuffleDeck(createFullDeck())
@@ -91,5 +108,161 @@ export class GameEngine {
 
   getState(): Readonly<ServerGameState> {
     return this.state
+  }
+
+  playCard(
+    playerId: string,
+    cardId: string,
+  ): {
+    matchOptions: readonly HwaTuCard[]
+    isBomb: boolean
+  } {
+    const player = this.state.players.find((p) => p.id === playerId)
+    if (!player) throw new Error('PLAYER_NOT_FOUND')
+
+    const card = player.hand.find((c) => c.id === cardId)
+    if (!card) throw new Error('CARD_NOT_IN_HAND')
+
+    const matches = findFieldMatches(card, this.state.fieldCards)
+    const matchCount = getMatchCount(card, this.state.fieldCards)
+    const bomb = isBomb(matchCount)
+
+    const newHand = player.hand.filter((c) => c.id !== cardId)
+
+    let newFieldCards = this.state.fieldCards
+    let newCaptured: CapturedCards = { ...player.captured }
+    let newPhase: GamePhase
+    let newTurnContext: TurnContext
+
+    if (matches.length === 0) {
+      // No match: place card on field
+      newFieldCards = [...this.state.fieldCards, card]
+      newPhase = {
+        phase: 'TURN_FLIP_DECK',
+        currentPlayerId: playerId,
+        timeoutAt: Date.now() + 30000,
+      }
+      newTurnContext = null
+    } else if (matches.length === 1) {
+      // Exactly 1 match: auto-capture both cards
+      const match = matches[0]!
+      newFieldCards = this.state.fieldCards.filter((c) => c.id !== match.id)
+      const captureKey = getCaptureKey(card)
+      newCaptured = {
+        ...player.captured,
+        [captureKey]: [...player.captured[captureKey], card, match],
+      }
+      newPhase = {
+        phase: 'TURN_FLIP_DECK',
+        currentPlayerId: playerId,
+        timeoutAt: Date.now() + 30000,
+      }
+      newTurnContext = null
+    } else {
+      // Multiple matches: player must choose which field card to capture
+      newPhase = {
+        phase: 'TURN_CHOOSE_FIELD_CARD',
+        currentPlayerId: playerId,
+        matchOptions: matches.map((c) => c.id),
+        timeoutAt: Date.now() + 30000,
+      }
+      newTurnContext = {
+        type: 'CARD_CHOICE',
+        playedCard: card,
+        matchingFieldCards: matches,
+      }
+    }
+
+    const updatedPlayer: ServerPlayerState = {
+      ...player,
+      hand: newHand,
+      captured: newCaptured,
+    }
+
+    this.state = {
+      ...this.state,
+      players: this.state.players.map((p) => (p.id === playerId ? updatedPlayer : p)),
+      fieldCards: newFieldCards,
+      phase: newPhase,
+      turnContext: newTurnContext,
+    }
+
+    return { matchOptions: matches, isBomb: bomb }
+  }
+
+  flipDeck(playerId: string): {
+    flippedCard: HwaTuCard
+    matchOptions: readonly HwaTuCard[]
+  } {
+    const [flippedCard, ...remainingDeck] = this.state.deck
+    if (!flippedCard) throw new Error('DECK_EMPTY')
+
+    const matches = findFieldMatches(flippedCard, this.state.fieldCards)
+
+    const newPhase: GamePhase =
+      matches.length > 1
+        ? {
+            phase: 'TURN_CHOOSE_FLIP_MATCH',
+            currentPlayerId: playerId,
+            matchOptions: matches.map((c) => c.id),
+            timeoutAt: Date.now() + 30000,
+          }
+        : { phase: 'TURN_RESOLVE_CAPTURE', currentPlayerId: playerId }
+
+    const newTurnContext: TurnContext =
+      matches.length > 1
+        ? { type: 'CARD_CHOICE', playedCard: flippedCard, matchingFieldCards: matches }
+        : null
+
+    this.state = {
+      ...this.state,
+      deck: remainingDeck,
+      phase: newPhase,
+      turnContext: newTurnContext,
+    }
+
+    return { flippedCard, matchOptions: matches }
+  }
+
+  advanceTurn(): void {
+    const nextIndex = (this.state.currentPlayerIndex + 1) % this.state.players.length
+    const nextPlayer = this.state.players[nextIndex]
+
+    this.state = {
+      ...this.state,
+      currentPlayerIndex: nextIndex,
+      phase: {
+        phase: 'TURN_PLAY_CARD',
+        currentPlayerId: nextPlayer?.id ?? '',
+        timeoutAt: Date.now() + 30000,
+      },
+      turnContext: null,
+    }
+  }
+
+  checkScore(playerId: string): { score: ScoreBreakdown; canGoStop: boolean } {
+    const player = this.state.players.find((p) => p.id === playerId)
+    if (!player) throw new Error('PLAYER_NOT_FOUND')
+
+    const score = calculateScore(player.captured)
+    const playerCount = this.state.players.length as 2 | 3
+    const canGoStop = canDeclareGoStop(score.finalPoints, playerCount)
+
+    return { score, canGoStop }
+  }
+
+  declareGo(playerId: string): void {
+    const player = this.state.players.find((p) => p.id === playerId)
+    if (!player) throw new Error('PLAYER_NOT_FOUND')
+
+    const updatedPlayer: ServerPlayerState = {
+      ...player,
+      goCount: player.goCount + 1,
+    }
+
+    this.state = {
+      ...this.state,
+      players: this.state.players.map((p) => (p.id === playerId ? updatedPlayer : p)),
+    }
   }
 }
